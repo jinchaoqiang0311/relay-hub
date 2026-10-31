@@ -297,10 +297,23 @@ function inviteLink(s) {
 
 function inviteRow(s) {
   const link = inviteLink(s);
-  if (!link) return "";
+  if (!link) {
+    if (!s.aff_code) {
+      return `<div class="invite-row">
+        <span class="invite-label">邀请</span>
+        <span class="invite-link is-hint">邀请码待获取：同步后自动填充，或在「编辑」里手填</span>
+      </div>`;
+    }
+    // 有邀请码但没填站点地址（手动站）：直接展示并复制码本身
+    return `<div class="invite-row" title="${esc(s.aff_code)}">
+      <span class="invite-label">邀请码</span>
+      <span class="invite-link" data-act="copy-invite">${esc(s.aff_code)}</span>
+      <button class="btn btn-sm" data-act="copy-invite">复制</button>
+    </div>`;
+  }
   return `<div class="invite-row" title="${esc(link)}">
     <span class="invite-label">邀请</span>
-    <span class="invite-link">${esc(link)}</span>
+    <span class="invite-link" data-act="copy-invite">${esc(link)}</span>
     <button class="btn btn-sm" data-act="copy-invite">复制</button>
   </div>`;
 }
@@ -365,7 +378,7 @@ function renderTrend() {
 /* ---------- 站点卡片操作 ---------- */
 
 $("sites").addEventListener("click", async (e) => {
-  const btn = e.target.closest("button[data-act]");
+  const btn = e.target.closest("[data-act]");
   if (!btn) return;
   const id = Number(btn.closest(".card").dataset.id);
   const site = state.sites.find((x) => x.id === id);

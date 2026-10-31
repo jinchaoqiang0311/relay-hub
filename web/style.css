@@ -441,6 +441,9 @@ input::placeholder { color: var(--faint); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.invite-link[data-act] { cursor: pointer; }
+.invite-link[data-act]:hover { color: var(--accent); }
+.invite-link.is-hint { color: var(--faint); }
 
 .badge-manual {
   font-size: 10.5px;
