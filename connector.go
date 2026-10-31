@@ -251,6 +251,125 @@ func (c *apiClient) LoginAutoToken(baseURL, username, password string) (*autoTok
 	return &autoTokenResult{SelfInfo: *info, Token: token, UserID: lu.ID}, nil
 }
 
+// ---------- 签到（new-api 系 + Sub2API，端点参考 all-api-hub 适配层） ----------
+
+// NewApiCheckInEnabled 读站点公开状态里的签到开关。
+// new-api 用 checkin_enabled，Veloera 用 check_in_enabled（下划线位置不同，参考其 controller/misc.go）。
+func (c *apiClient) NewApiCheckInEnabled(baseURL string) bool {
+	env, status, err := c.request(http.MethodGet, strings.TrimRight(baseURL, "/")+"/api/status", nil)
+	if err != nil || status != http.StatusOK || !env.Success {
+		return false
+	}
+	var st struct {
+		CheckinEnabled *bool `json:"checkin_enabled"`
+		CheckInEnabled *bool `json:"check_in_enabled"`
+	}
+	if json.Unmarshal(env.Data, &st) != nil {
+		return false
+	}
+	if st.CheckinEnabled != nil {
+		return *st.CheckinEnabled
+	}
+	if st.CheckInEnabled != nil {
+		return *st.CheckInEnabled
+	}
+	return false
+}
+
+// NewApiCheckInAlready 查询今日是否已签（GET /api/user/checkin?month=YYYY-MM）。
+func (c *apiClient) NewApiCheckInAlready(baseURL, token string, userID int64) (bool, error) {
+	month := time.Now().Format("2006-01")
+	endpoint := strings.TrimRight(baseURL, "/") + "/api/user/checkin?month=" + month
+	hdrs := authHeaders(token, userID)
+	env, status, err := c.request(http.MethodGet, endpoint, hdrs)
+	if err != nil {
+		return false, err
+	}
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		hdrs["Authorization"] = token
+		env, status, err = c.request(http.MethodGet, endpoint, hdrs)
+		if err != nil {
+			return false, err
+		}
+	}
+	if status != http.StatusOK || !env.Success {
+		return false, fmt.Errorf("签到状态接口异常（HTTP %d）", status)
+	}
+	var st struct {
+		Stats struct {
+			CheckedInToday bool `json:"checked_in_today"`
+		} `json:"stats"`
+	}
+	if err := json.Unmarshal(env.Data, &st); err != nil {
+		return false, fmt.Errorf("解析签到状态失败: %w", err)
+	}
+	return st.Stats.CheckedInToday, nil
+}
+
+// NewApiCheckIn 执行签到（POST /api/user/checkin），返回奖励 quota 与站方消息。
+// 站方对"今日已签"可能仍返回非 success，按消息内容识别为幂等成功。
+func (c *apiClient) NewApiCheckIn(baseURL, token string, userID int64) (quota int64, msg string, err error) {
+	endpoint := strings.TrimRight(baseURL, "/") + "/api/user/checkin"
+	hdrs := authHeaders(token, userID)
+	env, status, err := c.request(http.MethodPost, endpoint, hdrs)
+	if err != nil {
+		return 0, "", err
+	}
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		hdrs["Authorization"] = token
+		env, status, err = c.request(http.MethodPost, endpoint, hdrs)
+		if err != nil {
+			return 0, "", err
+		}
+	}
+	if status != http.StatusOK {
+		return 0, "", fmt.Errorf("签到接口返回 HTTP %d", status)
+	}
+	msg = strings.TrimSpace(env.Message)
+	if !env.Success {
+		if strings.Contains(msg, "已签") || strings.Contains(strings.ToLower(msg), "already") {
+			return 0, "今日已签到", nil
+		}
+		if msg == "" {
+			msg = "站点未返回错误原因"
+		}
+		return 0, "", errors.New("签到失败: " + msg)
+	}
+	var d struct {
+		QuotaAwarded int64 `json:"quota_awarded"`
+	}
+	_ = json.Unmarshal(env.Data, &d)
+	return d.QuotaAwarded, msg, nil
+}
+
+// Sub2ApiCheckIn 执行 Sub2API 签到（POST /api/v1/redeem/checkin），返回站方消息。
+func (c *apiClient) Sub2ApiCheckIn(baseURL, token string) (string, error) {
+	env, status, err := c.sub2apiRequest(http.MethodPost, strings.TrimRight(baseURL, "/")+"/api/v1/redeem/checkin", token, "")
+	if err != nil {
+		return "", err
+	}
+	if status == http.StatusUnauthorized {
+		return "", errors.New("JWT 已过期，请重新获取令牌")
+	}
+	if status != http.StatusOK {
+		return "", fmt.Errorf("签到接口返回 HTTP %d", status)
+	}
+	msg := strings.TrimSpace(env.Message)
+	if env.Code != 0 {
+		if strings.Contains(msg, "已签") || strings.Contains(strings.ToLower(msg), "already") {
+			return "今日已签到", nil
+		}
+		if msg == "" {
+			msg = fmt.Sprintf("code %d", env.Code)
+		}
+		return "", errors.New("签到失败: " + msg)
+	}
+	if msg == "" {
+		msg = "签到成功"
+	}
+	return msg, nil
+}
+
 // TransferAff 调用 /api/user/aff_transfer，把邀请奖励转入余额。
 func (c *apiClient) TransferAff(baseURL, token string, userID int64) error {
 	endpoint := baseURL + "/api/user/aff_transfer"

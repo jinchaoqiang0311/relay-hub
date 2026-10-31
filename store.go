@@ -32,6 +32,9 @@ type Settings struct {
 	TGNotifyIncome  bool   `json:"tg_notify_income"`           // 进账提醒
 	TGNotifyDown    bool   `json:"tg_notify_down"`             // 跑路预警与恢复
 	TGDownThreshold int    `json:"tg_down_threshold"`          // 连续失败多少次触发预警
+
+	// AutoCheckin 同步成功后自动执行站点签到（new-api 系 + Sub2API）
+	AutoCheckin bool `json:"auto_checkin"`
 }
 
 type Site struct {

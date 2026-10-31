@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"math"
 	"sync"
@@ -145,7 +146,46 @@ func (s *Syncer) SyncSite(id int64) error {
 	if prev != nil {
 		s.notifier.NotifyIncome(v, site, *prev, snap)
 	}
+	s.maybeAutoCheckIn(site, token)
 	return nil
+}
+
+// maybeAutoCheckIn 全局开关开启时，在同步成功后执行站点签到。
+// 结果经 TG「进账」通知推送；失败只写日志，绝不影响同步状态。
+func (s *Syncer) maybeAutoCheckIn(site Site, token string) {
+	set := s.db.Settings()
+	if !set.AutoCheckin || site.Type == "manual" {
+		return
+	}
+	var detail string
+	var err error
+	switch site.Type {
+	case "sub2api":
+		detail, err = s.client.Sub2ApiCheckIn(site.BaseURL, token)
+	default:
+		if !s.client.NewApiCheckInEnabled(site.BaseURL) {
+			return // 站点未开启签到
+		}
+		already, err := s.client.NewApiCheckInAlready(site.BaseURL, token, site.UserID)
+		if err != nil {
+			log.Printf("[checkin] %s 状态查询失败: %v", site.Name, err)
+			return
+		}
+		if already {
+			return
+		}
+		var quota int64
+		quota, detail, err = s.client.NewApiCheckIn(site.BaseURL, token, site.UserID)
+		if err == nil {
+			detail = fmt.Sprintf("%s（+%s 已到账）", detail, usd(quota, set.QuotaPerUnit))
+		}
+	}
+	if err != nil {
+		log.Printf("[checkin] %s 自动签到失败: %v", site.Name, err)
+		return
+	}
+	log.Printf("[checkin] %s 自动签到: %s", site.Name, detail)
+	s.notifier.NotifyCheckIn(s.currentVault(), site.Name, detail)
 }
 
 // syncSub2Api 同步 Sub2API 站点：auth/me 取美元余额换算 quota，顺带尽力取邀请码。
@@ -177,12 +217,14 @@ func (s *Syncer) syncSub2Api(site Site, token string) error {
 		Time:   now,
 		Quota:  int64(math.Round(me.Balance * per)),
 	})
+	s.maybeAutoCheckIn(site, token)
 	if wasDown {
 		s.notifier.NotifyRecover(s.currentVault(), site, site.DownCount)
 	}
 	return nil
 }
 
+// syncSub2Api 后的签到也走统一入口（余额同步成功即触发）。
 func (s *Syncer) markFailure(id int64, msg string) {
 	if len(msg) > 300 {
 		msg = msg[:300]

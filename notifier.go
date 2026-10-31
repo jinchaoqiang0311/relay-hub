@@ -146,6 +146,15 @@ func (n *Notifier) Test(v *Vault) error {
 	return n.send(v, "✅ RelayHub 测试通知：连接正常。进账提醒与跑路预警将发送到这里。")
 }
 
+// NotifyCheckIn 自动签到成功后推送提醒（归入进账类通知开关）。
+func (n *Notifier) NotifyCheckIn(v *Vault, siteName, detail string) {
+	set := n.db.Settings()
+	if !set.TGNotifyIncome {
+		return
+	}
+	n.deliver(v, siteName, "📅 自动签到\n站点："+siteName+"\n"+detail)
+}
+
 func usd(quota int64, perUnit float64) string {
 	if perUnit <= 0 {
 		perUnit = 500000

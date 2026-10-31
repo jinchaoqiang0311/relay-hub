@@ -859,6 +859,7 @@ $("btn-settings").addEventListener("click", async () => {
     const s = await api("/api/settings");
     $("s-interval").value = s.sync_interval_min;
     $("s-quota").value = s.quota_per_unit;
+    $("s-checkin").checked = !!s.auto_checkin;
     const tg = s.tg || {};
     $("s-tg-income").checked = !!tg.notify_income;
     $("s-tg-down").checked = !!tg.notify_down;
@@ -910,6 +911,7 @@ $("settings-form").addEventListener("submit", async (e) => {
       body: JSON.stringify({
         sync_interval_min: Number($("s-interval").value),
         quota_per_unit: Number($("s-quota").value),
+        auto_checkin: $("s-checkin").checked,
         tg: {
           notify_income: $("s-tg-income").checked,
           notify_down: $("s-tg-down").checked,

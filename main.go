@@ -773,6 +773,7 @@ func (a *app) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, map[string]any{
 		"quota_per_unit":    set.QuotaPerUnit,
 		"sync_interval_min": set.SyncIntervalMin,
+		"auto_checkin":      set.AutoCheckin,
 		"tg": map[string]any{
 			"has_bot_token":  set.TGBotTokenEnc != "",
 			"chat_id":        set.TGChatID,
@@ -798,6 +799,7 @@ type tgSettings struct {
 type settingsRequest struct {
 	QuotaPerUnit    float64    `json:"quota_per_unit"`
 	SyncIntervalMin int        `json:"sync_interval_min"`
+	AutoCheckin     bool       `json:"auto_checkin"`
 	TG              tgSettings `json:"tg"`
 }
 
@@ -831,6 +833,7 @@ func (a *app) handleSettingsPost(w http.ResponseWriter, r *http.Request) {
 	if err := a.db.UpdateSettings(func(s *Settings) {
 		s.QuotaPerUnit = req.QuotaPerUnit
 		s.SyncIntervalMin = req.SyncIntervalMin
+		s.AutoCheckin = req.AutoCheckin
 		s.TGChatID = strings.TrimSpace(req.TG.ChatID)
 		s.TGAPIBase = strings.TrimSpace(req.TG.APIBase)
 		s.TGProxyURL = strings.TrimSpace(req.TG.ProxyURL)
