@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>RelayHub</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>RelayHub</div>
+  <div class="actions">
+    <button id="btn-sync" class="btn" title="立即同步全部站点">同步</button>
+    <button id="btn-add" class="btn btn-primary">＋ 添加</button>
+  </div>
+</header>
+
+<main id="content">
+  <div id="totals" class="totals"></div>
+  <div id="sites"></div>
+  <div id="empty" class="empty hidden">
+    <p>还没有添加站点。</p>
+    <p class="muted">填站点地址 + 系统访问令牌 + 数字用户 ID（站点控制台 → 个人设置生成）。</p>
+  </div>
+</main>
+
+<!-- 添加表单 -->
+<div id="add-form" class="add-form hidden">
+  <label class="field">
+    <span class="field-label">站点地址</span>
+    <input id="f-url" placeholder="https://api.example.com" spellcheck="false">
+  </label>
+  <div class="grid2">
+    <label class="field">
+      <span class="field-label">系统访问令牌</span>
+      <input id="f-token" type="password" placeholder="sk 无关，控制台生成" autocomplete="off" spellcheck="false">
+    </label>
+    <label class="field">
+      <span class="field-label">数字用户 ID</span>
+      <input id="f-uid" type="number" placeholder="如 1234">
+    </label>
+  </div>
+  <label class="check">
+    <input type="checkbox" id="f-manual">
+    <span>手动记录（不接 API）</span>
+  </label>
+  <p id="add-error" class="err hidden"></p>
+  <div class="row">
+    <span class="spacer"></span>
+    <button id="btn-cancel" class="btn">取消</button>
+    <button id="btn-save" class="btn btn-primary">保存</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<script src="popup.js"></script>
+</body>
+</html>

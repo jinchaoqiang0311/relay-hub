@@ -1,0 +1,174 @@
+/* RelayHub Companion popup —— 与主站同一套「账本」设计令牌（OKLCH 暖黑 + 琥珀） */
+:root {
+  --bg: oklch(0.16 0.008 80);
+  --surface: oklch(0.205 0.01 80);
+  --surface-2: oklch(0.245 0.012 80);
+  --border: oklch(0.31 0.012 80);
+  --border-strong: oklch(0.42 0.014 80);
+  --fg: oklch(0.94 0.004 80);
+  --muted: oklch(0.68 0.008 80);
+  --faint: oklch(0.52 0.008 80);
+  --accent: oklch(0.80 0.135 85);
+  --accent-soft: oklch(0.80 0.135 85 / 0.14);
+  --ok: oklch(0.74 0.14 155);
+  --err: oklch(0.68 0.17 25);
+  --r-sm: 5px;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  width: 360px;
+  max-height: 560px;
+  overflow-y: auto;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.5 "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+}
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+.brand-mark { display: inline-flex; flex-direction: column; gap: 3px; }
+.brand-mark span { display: block; height: 2px; border-radius: 2px; background: var(--accent); }
+.brand-mark span:nth-child(1) { width: 16px; }
+.brand-mark span:nth-child(2) { width: 11px; }
+.brand-mark span:nth-child(3) { width: 14px; }
+.actions { display: flex; gap: 6px; }
+
+.btn {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12.5px;
+  min-height: 26px;
+  padding: 2px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: oklch(0.19 0.03 85); font-weight: 600; }
+.btn-danger { color: var(--err); }
+
+main { padding: 10px 12px 14px; }
+
+.totals {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.totals .t {
+  flex: 1;
+  background: var(--surface);
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 3px double var(--border-strong);
+  padding: 8px 10px;
+}
+.totals .t-label { color: var(--muted); font-size: 11px; }
+.totals .t-val { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; }
+
+.site {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.site-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.site-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-name a { color: var(--fg); text-decoration: none; }
+.site-name a:hover { color: var(--accent); }
+.status { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.status.bad { color: var(--err); }
+.dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+.dot-ok { background: var(--ok); }
+.dot-err { background: var(--err); }
+.dot-idle { background: var(--faint); }
+
+.site-nums { display: flex; gap: 10px; }
+.site-nums .n { flex: 1; }
+.site-nums .n-label { color: var(--muted); font-size: 11px; }
+.site-nums .n-val { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.site-nums .n-val.main { font-size: 16px; }
+
+.site-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.site-foot .muted { font-size: 11px; color: var(--faint); }
+.site-foot .btn { min-height: 22px; padding: 1px 8px; font-size: 11.5px; }
+
+.err-text {
+  background: oklch(0.68 0.17 25 / 0.12);
+  color: oklch(0.82 0.09 25);
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  padding: 6px 8px;
+  margin-top: 8px;
+  word-break: break-all;
+}
+
+.empty { text-align: center; padding: 32px 12px; color: var(--muted); }
+.empty .muted { color: var(--faint); font-size: 12px; }
+
+/* 添加表单 */
+.add-form {
+  margin: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 12px;
+}
+.field { display: block; margin-bottom: 8px; }
+.field-label { display: block; color: var(--muted); font-size: 11px; margin-bottom: 3px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+input {
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12.5px;
+}
+input:focus-visible { outline: none; border-color: var(--accent); }
+.check { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.check input { width: auto; }
+.row { display: flex; gap: 6px; }
+.spacer { flex: 1; }
+.err {
+  background: oklch(0.68 0.17 25 / 0.12);
+  color: oklch(0.82 0.09 25);
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  padding: 6px 8px;
+  margin: 0 0 8px;
+  word-break: break-all;
+}
+.hidden { display: none !important; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: 6px 14px;
+  font-size: 12px;
+  max-width: 90%;
+  z-index: 10;
+}
+.toast.is-error { border-color: var(--err); color: oklch(0.82 0.09 25); }

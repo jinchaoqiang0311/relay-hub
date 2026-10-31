@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "RelayHub Companion",
+  "version": "0.1.0",
+  "description": "中转站推广收益聚合：多站余额与邀请奖励一站式查看。独立运行，数据仅存本机。",
+  "permissions": ["storage", "alarms"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "RelayHub 中转站收益台"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
