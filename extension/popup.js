@@ -18,6 +18,10 @@ function fmtUSD(quota, per) {
 }
 
 let toastTimer = null;
+
+// 令牌揭示状态（按站点 ID），仅影响当前弹窗显示
+const revealedToks = new Set();
+let currentSites = [];
 function toast(msg, isError = false) {
   const el = $("toast");
   el.textContent = msg;
@@ -39,6 +43,7 @@ function relTime(ts) {
 async function loadSites() {
   const { sites = [], history = {}, lastOk = {}, settings = {} } =
     await chrome.storage.local.get(["sites", "history", "lastOk", "settings"]);
+  currentSites = sites;
   render(sites, history, lastOk, settings.quotaPerUnit);
 }
 
@@ -82,26 +87,64 @@ function siteHTML(s, arr, ok, per) {
       <div class="n"><div class="n-label">累计收益</div><div class="n-val">${last ? fmtUSD(last.hist, per) : "—"}</div></div>
     </div>
     ${ok && !ok.ok && ok.error ? `<div class="err-text">${esc(ok.error)}</div>` : ""}
+    ${revealedToks.has(s.id) ? `<div class="tok-plain" title="点「令牌」可隐藏">${esc(s.token)}</div>` : ""}
     <div class="site-foot">
       <span class="muted">${last ? relTime(last.t) : "尚无数据"}</span>
-      <button class="btn btn-danger" data-act="del">删除</button>
+      <span>
+        ${s.token ? `<button class="btn" data-act="tok">${revealedToks.has(s.id) ? "隐藏" : "令牌"}</button><button class="btn" data-act="copy-tok">复制令牌</button>` : ""}
+        <button class="btn btn-danger" data-act="del">删除</button>
+      </span>
     </div>
   </article>`;
 }
 
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  }
+}
+
 $("sites").addEventListener("click", async (e) => {
-  const btn = e.target.closest("button[data-act='del']");
+  const btn = e.target.closest("[data-act]");
   if (!btn) return;
   const id = Number(btn.closest(".site").dataset.id);
-  if (!confirm("确认删除该站点及其本地历史？")) return;
-  const { sites = [], history = {}, lastOk = {} } =
-    await chrome.storage.local.get(["sites", "history", "lastOk"]);
-  await chrome.storage.local.set({
-    sites: sites.filter((s) => s.id !== id),
-    history: { ...history, [id]: undefined },
-    lastOk: { ...lastOk, [id]: undefined },
-  });
-  loadSites();
+  const site = currentSites.find((x) => x.id === id);
+  if (!site) return;
+  const act = btn.dataset.act;
+
+  if (act === "tok") {
+    if (revealedToks.has(id)) revealedToks.delete(id);
+    else revealedToks.add(id);
+    loadSites();
+    return;
+  }
+  if (act === "copy-tok") {
+    if (await copyText(site.token)) toast("令牌已复制");
+    else toast("复制失败", true);
+    return;
+  }
+  if (act === "del") {
+    if (!confirm("确认删除该站点及其本地历史？")) return;
+    const { sites = [], history = {}, lastOk = {} } =
+      await chrome.storage.local.get(["sites", "history", "lastOk"]);
+    await chrome.storage.local.set({
+      sites: sites.filter((s) => s.id !== id),
+      history: { ...history, [id]: undefined },
+      lastOk: { ...lastOk, [id]: undefined },
+    });
+    revealedToks.delete(id);
+    loadSites();
+  }
 });
 
 /* ---------- 当前标签页网址自动填充 ---------- */
