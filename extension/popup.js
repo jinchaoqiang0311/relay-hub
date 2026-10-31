@@ -372,6 +372,53 @@ $("btn-auto").addEventListener("click", async () => {
   }
 });
 
+/* ---------- 导入 RelayHub 主程序导出的站点文件 ---------- */
+
+$("btn-import").addEventListener("click", () => $("import-file").click());
+
+$("import-file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    const incoming = Array.isArray(data.sites) ? data.sites : null;
+    if (!incoming) throw new Error("文件格式不对：应为 RelayHub 主程序「导出到插件」的站点文件");
+    const { sites = [] } = await chrome.storage.local.get("sites");
+    let nextId = sites.reduce((m, s) => Math.max(m, s.id || 0), 0);
+    const existing = new Set(sites.map((s) => (s.baseUrl || "") + "|" + (s.type || "auto")));
+    let added = 0;
+    let skipped = 0;
+    for (const s of incoming) {
+      const base = (s.base_url || "").replace(/\/+$/, "");
+      const type = s.type || "auto";
+      if (!base || !s.token) { skipped++; continue; }
+      const key = base + "|" + type;
+      if (existing.has(key)) { skipped++; continue; }
+      existing.add(key);
+      nextId++;
+      let name = s.name;
+      if (!name) { try { name = new URL(base).hostname; } catch { name = base; } }
+      sites.push({
+        id: nextId,
+        name,
+        baseUrl: base,
+        type,
+        token: s.token,
+        userId: s.user_id || 0,
+        enabled: s.enabled !== false,
+      });
+      added++;
+    }
+    await chrome.storage.local.set({ sites });
+    toast(`导入完成：新增 ${added} 个${skipped ? `，跳过 ${skipped} 个（重复或无效）` : ""}`);
+    loadSites();
+    chrome.runtime.sendMessage({ type: "syncNow" }, () => setTimeout(loadSites, 1500));
+  } catch (err) {
+    toast(err && err.message ? err.message : "导入失败", true);
+  }
+});
+
 /* ---------- 同步按钮 ---------- */
 
 $("btn-sync").addEventListener("click", () => {

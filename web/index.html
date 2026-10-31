@@ -302,9 +302,10 @@
     <div class="row-btns">
       <button type="button" class="btn" id="btn-export">导出数据</button>
       <button type="button" class="btn" id="btn-import">导入数据</button>
+      <button type="button" class="btn" id="btn-export-ext">导出到插件</button>
       <input type="file" id="import-file" accept="application/json,.json" class="hidden">
     </div>
-    <p class="hint">导出文件含<b>加密令牌</b>与主密码校验值：在新机器导入后，用「导出时的主密码」解锁即可无缝迁移。导入会覆盖本机全部数据。</p>
+    <p class="hint">导出文件含<b>加密令牌</b>与主密码校验值：在新机器导入后，用「导出时的主密码」解锁即可无缝迁移。导入会覆盖本机全部数据。「导出到插件」生成含明文令牌的站点文件，供插件弹窗「导入」使用，用完建议删除。</p>
 
     <p id="settings-error" class="form-error hidden" role="alert"></p>
     <div class="dialog-actions">

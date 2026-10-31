@@ -936,6 +936,11 @@ $("btn-export").addEventListener("click", () => {
   toast("已开始下载导出文件");
 });
 
+$("btn-export-ext").addEventListener("click", () => {
+  window.open("/api/export/extension");
+  toast("已下载站点文件（含明文令牌），到插件弹窗点「导入」选择它");
+});
+
 $("btn-import").addEventListener("click", () => $("import-file").click());
 
 $("import-file").addEventListener("change", async (e) => {

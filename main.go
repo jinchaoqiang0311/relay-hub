@@ -68,6 +68,7 @@ func main() {
 	mux.HandleFunc("POST /api/notify/tg-chatid", a.requireUnlock(a.handleTGChatID))
 	mux.HandleFunc("POST /api/notify/tg-test", a.requireUnlock(a.handleTGTest))
 	mux.HandleFunc("GET /api/export", a.requireUnlock(a.handleExport))
+	mux.HandleFunc("GET /api/export/extension", a.requireUnlock(a.handleExtensionExport))
 	mux.HandleFunc("POST /api/import", a.requireUnlock(a.handleImport))
 	mux.HandleFunc("GET /api/trend", a.requireUnlock(a.handleTrend))
 	mux.HandleFunc("GET /api/withdrawals", a.requireUnlock(a.handleWithdrawalsList))
@@ -881,6 +882,47 @@ func (a *app) handleExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="relayhub-export.json"`)
 	_, _ = w.Write(raw)
+}
+
+// handleExtensionExport 导出供浏览器插件导入的站点文件（含明文令牌，需解锁）。
+// 手动记录站点不含令牌，对插件无意义，跳过。
+func (a *app) handleExtensionExport(w http.ResponseWriter, r *http.Request) {
+	v := a.syncer.currentVault()
+	type extSite struct {
+		Name    string `json:"name"`
+		BaseURL string `json:"base_url"`
+		Type    string `json:"type"`
+		Token   string `json:"token,omitempty"`
+		UserID  int64  `json:"user_id,omitempty"`
+		AffCode string `json:"aff_code,omitempty"`
+		Enabled bool   `json:"enabled"`
+	}
+	sites := make([]extSite, 0)
+	for _, s := range a.db.ListSites() {
+		if s.Type == "manual" || s.TokenEnc == "" || !s.Enabled {
+			continue
+		}
+		token, err := v.openString(s.TokenEnc)
+		if err != nil {
+			continue
+		}
+		sites = append(sites, extSite{
+			Name:    s.Name,
+			BaseURL: s.BaseURL,
+			Type:    s.Type,
+			Token:   token,
+			UserID:  s.UserID,
+			AffCode: s.AffCode,
+			Enabled: s.Enabled,
+		})
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="relayhub-sites.json"`)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"version":     1,
+		"exported_at": time.Now(),
+		"sites":       sites,
+	})
 }
 
 // handleImport 整体导入数据文件（站点/历史/台账/设置）。
