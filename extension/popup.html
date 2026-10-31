@@ -42,10 +42,26 @@
       <input id="f-uid" type="number" placeholder="如 1234">
     </label>
   </div>
-  <label class="check">
-    <input type="checkbox" id="f-manual">
-    <span>手动记录（不接 API）</span>
+  <label class="field">
+    <span class="field-label">站点类型</span>
+    <select id="f-type">
+      <option value="auto">new-api / one-api 系</option>
+      <option value="sub2api">Sub2API（账号用邮箱）</option>
+      <option value="manual">手动记录（不接 API）</option>
+    </select>
   </label>
+  <div id="f-s2a" class="hidden">
+    <div class="grid2">
+      <label class="field">
+        <span class="field-label">邮箱</span>
+        <input id="f-email" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field">
+        <span class="field-label">密码</span>
+        <input id="f-pass2" type="password" autocomplete="off">
+      </label>
+    </div>
+  </div>
   <button type="button" class="btn btn-block" id="btn-auto">🔑 从登录态自动获取令牌 + 用户 ID</button>
   <p class="hint-sm">需先在浏览器的标签页里登录该站。已生成过令牌的站直接复用现有令牌（不影响别处在用的）；从未生成过的才自动生成（旧令牌随之失效）。</p>
   <p id="add-error" class="err hidden"></p>

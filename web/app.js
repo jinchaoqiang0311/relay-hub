@@ -524,6 +524,7 @@ $("btn-add-empty").addEventListener("click", () => openSiteDialog(null));
 $("btn-cancel").addEventListener("click", () => $("site-dialog").close());
 $("f-type").addEventListener("change", () => {
   applyTypeBlock();
+  $("f-user").placeholder = $("f-type").value === "sub2api" ? "注册邮箱" : "用户名 / 邮箱";
   hideErr("site-error");
   $("probe-result").classList.add("hidden");
 });
@@ -547,7 +548,7 @@ $("btn-autotoken").addEventListener("click", async () => {
   try {
     const res = await api("/api/sites/autotoken", {
       method: "POST",
-      body: JSON.stringify({ base_url: base, username: user, password: pass }),
+      body: JSON.stringify({ base_url: base, username: user, password: pass, type: $("f-type").value }),
     });
     $("f-token").value = res.token;
     $("f-uid").value = res.user_id;
@@ -582,7 +583,7 @@ $("btn-probe").addEventListener("click", async () => {
   try {
     const info = await api("/api/sites/probe", {
       method: "POST",
-      body: JSON.stringify({ base_url: base, token, user_id: uid }),
+      body: JSON.stringify({ base_url: base, token, user_id: uid, type: $("f-type").value }),
     });
     const p = $("probe-result");
     p.innerHTML =

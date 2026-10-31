@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"math"
 	"sync"
 	"time"
 )
@@ -98,6 +99,9 @@ func (s *Syncer) SyncSite(id int64) error {
 		s.markFailure(id, "读取令牌失败: "+err.Error())
 		return err
 	}
+	if site.Type == "sub2api" {
+		return s.syncSub2Api(site, token)
+	}
 	info, err := s.client.Probe(site.BaseURL, token, site.UserID)
 	if err != nil {
 		s.markFailure(id, err.Error())
@@ -140,6 +144,41 @@ func (s *Syncer) SyncSite(id int64) error {
 	}
 	if prev != nil {
 		s.notifier.NotifyIncome(v, site, *prev, snap)
+	}
+	return nil
+}
+
+// syncSub2Api 同步 Sub2API 站点：auth/me 取美元余额换算 quota，顺带尽力取邀请码。
+// 注意：Sub2API 的邀请收益不在 auth/me 里，暂无 aff_history 来源，进账提醒对这类站不生效。
+func (s *Syncer) syncSub2Api(site Site, token string) error {
+	me, err := s.client.Sub2ApiMe(site.BaseURL, token)
+	if err != nil {
+		s.markFailure(site.ID, err.Error())
+		return err
+	}
+	wasDown := site.DownCount > 0 && site.DownCount >= int64(s.db.Settings().TGDownThreshold)
+	per := s.db.Settings().QuotaPerUnit
+	affCode := s.client.Sub2ApiAffCode(site.BaseURL, token) // 网络调用放在拿锁之前
+	now := time.Now()
+	if err := s.db.UpdateSite(site.ID, func(st *Site) error {
+		st.LastSyncAt = now
+		st.LastSyncOK = true
+		st.LastError = ""
+		st.DownCount = 0
+		if affCode != "" {
+			st.AffCode = affCode
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	s.db.AddSnapshot(Snapshot{
+		SiteID: site.ID,
+		Time:   now,
+		Quota:  int64(math.Round(me.Balance * per)),
+	})
+	if wasDown {
+		s.notifier.NotifyRecover(s.currentVault(), site, site.DownCount)
 	}
 	return nil
 }

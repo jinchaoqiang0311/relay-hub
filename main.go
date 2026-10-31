@@ -221,6 +221,7 @@ type probeRequest struct {
 	BaseURL string `json:"base_url"`
 	Token   string `json:"token"`
 	UserID  int64  `json:"user_id"`
+	Type    string `json:"type"`
 }
 
 func (a *app) handleProbe(w http.ResponseWriter, r *http.Request) {
@@ -233,8 +234,26 @@ func (a *app) handleProbe(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if req.Token == "" || req.UserID == 0 {
-		writeErr(w, http.StatusBadRequest, "访问令牌与数字用户 ID 均必填")
+	if req.Token == "" {
+		writeErr(w, http.StatusBadRequest, "访问令牌必填")
+		return
+	}
+	if req.Type == "sub2api" {
+		me, err := a.syncer.client.Sub2ApiMe(base, req.Token)
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		per := a.db.Settings().QuotaPerUnit
+		writeOK(w, &SelfInfo{
+			Username:   me.Username,
+			Quota:      int64(math.Round(me.Balance * per)),
+			AffCode:    a.syncer.client.Sub2ApiAffCode(base, req.Token),
+		})
+		return
+	}
+	if req.UserID == 0 {
+		writeErr(w, http.StatusBadRequest, "数字用户 ID 必填")
 		return
 	}
 	info, err := a.syncer.client.Probe(base, req.Token, req.UserID)
@@ -249,6 +268,7 @@ type autoTokenRequest struct {
 	BaseURL  string `json:"base_url"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Type     string `json:"type"` // auto（用户名）| sub2api（邮箱）
 }
 
 func (a *app) handleAutoToken(w http.ResponseWriter, r *http.Request) {
@@ -263,6 +283,29 @@ func (a *app) handleAutoToken(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Username == "" || req.Password == "" {
 		writeErr(w, http.StatusBadRequest, "账号与密码必填（密码仅本次内存使用，不会被保存）")
+		return
+	}
+	if req.Type == "sub2api" {
+		token, userID, username, err := a.syncer.client.Sub2ApiLogin(base, req.Username, req.Password)
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		me, err := a.syncer.client.Sub2ApiMe(base, token)
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		per := a.db.Settings().QuotaPerUnit
+		writeOK(w, &autoTokenResult{
+			SelfInfo: SelfInfo{
+				Username: username,
+				Quota:    int64(math.Round(me.Balance * per)),
+				AffCode:  a.syncer.client.Sub2ApiAffCode(base, token),
+			},
+			Token:  token,
+			UserID: userID,
+		})
 		return
 	}
 	res, err := a.syncer.client.LoginAutoToken(base, req.Username, req.Password)
@@ -311,7 +354,7 @@ func (a *app) handleSiteAdd(w http.ResponseWriter, r *http.Request) {
 	if siteType == "" {
 		siteType = "auto"
 	}
-	if siteType != "auto" && siteType != "manual" {
+	if siteType != "auto" && siteType != "manual" && siteType != "sub2api" {
 		writeErr(w, http.StatusBadRequest, "无效的站点类型")
 		return
 	}
@@ -379,7 +422,7 @@ func (a *app) handleSiteAdd(w http.ResponseWriter, r *http.Request) {
 	site := &Site{
 		Name:     name,
 		BaseURL:  base,
-		Type:     "auto",
+		Type:     siteType,
 		UserID:   req.UserID,
 		TokenEnc: tokenEnc,
 		Enabled:  enabled,
@@ -421,7 +464,7 @@ func (a *app) handleSiteUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		tokenEnc = enc
 	}
-	if req.Type != "" && req.Type != "auto" && req.Type != "manual" {
+	if req.Type != "" && req.Type != "auto" && req.Type != "manual" && req.Type != "sub2api" {
 		writeErr(w, http.StatusBadRequest, "无效的站点类型")
 		return
 	}
@@ -567,6 +610,10 @@ func (a *app) handleAffTransfer(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if site.Type == "sub2api" {
+		writeErr(w, http.StatusBadRequest, "Sub2API 站点暂不支持一键转余额（站方无对应公开接口）")
 		return
 	}
 	v := a.syncer.currentVault()

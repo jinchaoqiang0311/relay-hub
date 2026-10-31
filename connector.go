@@ -278,3 +278,141 @@ func (c *apiClient) TransferAff(baseURL, token string, userID int64) error {
 	}
 	return nil
 }
+
+// ---------- Sub2API（Wei-Shaw/sub2api）适配 ----------
+// 与 new-api 系的差异：信封为 {code:0,data}；鉴权为登录换取的 Bearer JWT；
+// 身份接口 GET /api/v1/auth/me；余额字段 balance（美元）；邀请码 GET /api/v1/user/aff。
+
+type sub2apiEnvelope struct {
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data"`
+}
+
+// sub2apiRequest 发起带 Bearer JWT 的请求并解析 Sub2API 信封。
+func (c *apiClient) sub2apiRequest(method, endpoint, token, body string) (*sub2apiEnvelope, int, error) {
+	var rd io.Reader
+	if method == http.MethodPost {
+		if body == "" {
+			body = "{}"
+		}
+		rd = strings.NewReader(body)
+	}
+	req, err := http.NewRequest(method, endpoint, rd)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("无法连接站点: %w", err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("读取响应失败: %w", err)
+	}
+	env := &sub2apiEnvelope{}
+	if err := json.Unmarshal(raw, env); err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("响应不是 Sub2API 格式的 JSON（HTTP %d）", resp.StatusCode)
+	}
+	return env, resp.StatusCode, nil
+}
+
+func sub2apiErr(env *sub2apiEnvelope, status int) error {
+	msg := strings.TrimSpace(env.Message)
+	if msg == "" {
+		msg = fmt.Sprintf("HTTP %d", status)
+	}
+	return errors.New("站点返回: " + msg)
+}
+
+// Sub2ApiMe 是 /api/v1/auth/me 的关键字段（余额为美元）。
+type Sub2ApiMe struct {
+	ID       int64   `json:"id"`
+	Username string  `json:"username"`
+	Email    string  `json:"email"`
+	Balance  float64 `json:"balance"`
+}
+
+// Sub2ApiMe 拉取当前用户身份与美元余额。
+func (c *apiClient) Sub2ApiMe(baseURL, token string) (*Sub2ApiMe, error) {
+	env, status, err := c.sub2apiRequest(http.MethodGet, strings.TrimRight(baseURL, "/")+"/api/v1/auth/me", token, "")
+	if err != nil {
+		return nil, err
+	}
+	if status == http.StatusUnauthorized {
+		return nil, errors.New("令牌无效或已过期（Sub2API 的 JWT 有有效期，请重新用账号密码获取）")
+	}
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("auth/me 接口返回 HTTP %d", status)
+	}
+	if env.Code != 0 {
+		return nil, sub2apiErr(env, status)
+	}
+	var me Sub2ApiMe
+	if err := json.Unmarshal(env.Data, &me); err != nil {
+		return nil, fmt.Errorf("解析用户信息失败: %w", err)
+	}
+	if me.ID == 0 {
+		return nil, errors.New("auth/me 未返回用户 ID")
+	}
+	return &me, nil
+}
+
+// Sub2ApiAffCode 拉取邀请码（尽力而为，失败不阻塞同步）。
+func (c *apiClient) Sub2ApiAffCode(baseURL, token string) string {
+	env, status, err := c.sub2apiRequest(http.MethodGet, strings.TrimRight(baseURL, "/")+"/api/v1/user/aff", token, "")
+	if err != nil || status != http.StatusOK || env.Code != 0 {
+		return ""
+	}
+	var d struct {
+		AffCode string `json:"aff_code"`
+	}
+	if json.Unmarshal(env.Data, &d) != nil {
+		return ""
+	}
+	return d.AffCode
+}
+
+// Sub2ApiLogin 用邮箱+密码登录，返回 JWT、用户 ID 与用户名。
+func (c *apiClient) Sub2ApiLogin(baseURL, email, password string) (token string, userID int64, username string, err error) {
+	body, _ := json.Marshal(map[string]string{"email": email, "password": password})
+	env, status, err := c.sub2apiRequest(http.MethodPost, strings.TrimRight(baseURL, "/")+"/api/v1/auth/login", "", string(body))
+	if err != nil {
+		return "", 0, "", err
+	}
+	if status != http.StatusOK {
+		return "", 0, "", fmt.Errorf("登录接口返回 HTTP %d", status)
+	}
+	if env.Code != 0 {
+		return "", 0, "", sub2apiErr(env, status)
+	}
+	var d struct {
+		AccessToken string          `json:"access_token"`
+		Requires2FA bool            `json:"requires_2fa"`
+		User        json.RawMessage `json:"user"`
+	}
+	if err := json.Unmarshal(env.Data, &d); err != nil {
+		return "", 0, "", fmt.Errorf("解析登录响应失败: %w", err)
+	}
+	if d.Requires2FA {
+		return "", 0, "", errors.New("该账号开启了两步验证，无法自动登录，请手动获取")
+	}
+	if strings.TrimSpace(d.AccessToken) == "" {
+		return "", 0, "", errors.New("登录成功但站点未返回令牌")
+	}
+	var u struct {
+		ID       int64  `json:"id"`
+		Username string `json:"username"`
+	}
+	_ = json.Unmarshal(d.User, &u)
+	if u.ID == 0 {
+		return "", 0, "", errors.New("登录成功但未能解析用户 ID")
+	}
+	return d.AccessToken, u.ID, u.Username, nil
+}

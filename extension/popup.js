@@ -184,10 +184,13 @@ $("btn-add").addEventListener("click", async () => {
   if (!filled) $("f-url").focus();
 });
 $("btn-cancel").addEventListener("click", () => $("add-form").classList.add("hidden"));
-$("f-manual").addEventListener("change", () => {
-  const manual = $("f-manual").checked;
-  $("f-token").disabled = manual;
-  $("f-uid").disabled = manual;
+const siteType = () => $("f-type").value;
+
+$("f-type").addEventListener("change", () => {
+  const t = siteType();
+  $("f-s2a").classList.toggle("hidden", t !== "sub2api");
+  $("f-token").disabled = t !== "auto";
+  $("f-uid").disabled = t !== "auto";
 });
 
 $("btn-save").addEventListener("click", async () => {
@@ -196,11 +199,12 @@ $("btn-save").addEventListener("click", async () => {
   const showErr = (m) => { errEl.textContent = m; errEl.classList.remove("hidden"); };
 
   let baseUrl = $("f-url").value.trim();
-  const manual = $("f-manual").checked;
+  const type = siteType();
+  const manual = type === "manual";
   const token = $("f-token").value.trim();
   const userId = Number($("f-uid").value);
   if (!baseUrl && !manual) return showErr("站点地址必填");
-  if (!manual && (!token || !userId)) return showErr("令牌与数字用户 ID 必填");
+  if (!manual && (!token || !userId)) return showErr("令牌与数字用户 ID 必填（Sub2API 可用「自动获取」登录取得）");
 
   let origin = null;
   if (baseUrl) {
@@ -215,7 +219,7 @@ $("btn-save").addEventListener("click", async () => {
   const site = {
     id: Date.now(),
     baseUrl,
-    type: manual ? "manual" : "auto",
+    type,
     token: manual ? "" : token,
     userId: manual ? 0 : userId,
     enabled: true,
@@ -236,7 +240,8 @@ $("btn-save").addEventListener("click", async () => {
   sites.push(site);
   await chrome.storage.local.set({ sites });
   $("add-form").classList.add("hidden");
-  $("f-url").value = ""; $("f-token").value = ""; $("f-uid").value = ""; $("f-manual").checked = false;
+  $("f-url").value = ""; $("f-token").value = ""; $("f-uid").value = "";
+  $("f-email").value = ""; $("f-pass2").value = "";
   $("f-token").disabled = false; $("f-uid").disabled = false;
   loadSites();
   if (!manual) {
@@ -281,7 +286,43 @@ $("btn-auto").addEventListener("click", async () => {
   if (!/^https?:$/.test(u.protocol)) return showErr("仅支持 http/https");
   const base = u.origin;
 
-  if ($("f-manual").checked) return showErr("手动记录模式不接 API，无需获取令牌");
+  if (siteType() === "manual") return showErr("手动记录模式不接 API，无需获取令牌");
+
+  // Sub2API：用邮箱+密码调 /api/v1/auth/login 换 JWT（Sub2API 的令牌存 localStorage，Cookie 方式不可用）
+  if (siteType() === "sub2api") {
+    const email = $("f-email").value.trim();
+    const pass = $("f-pass2").value;
+    if (!base || !email || !pass) return showErr("Sub2API 需要站点地址、邮箱与密码");
+    const btn = $("btn-auto");
+    btn.disabled = true;
+    btn.textContent = "登录获取中…";
+    try {
+      const res = await fetch(base + "/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ email, password: pass }),
+      });
+      const env = await res.json().catch(() => null);
+      if (!env) throw new Error("响应不是 JSON，该站可能不是 Sub2API");
+      if (env.code !== 0 || !env.data || !env.data.access_token) {
+        throw new Error(env.message || `登录失败（HTTP ${res.status}）`);
+      }
+      if (env.data.requires_2fa) throw new Error("该账号开启了两步验证，插件无法自动登录");
+      const uid = env.data.user && env.data.user.id;
+      if (!uid) throw new Error("登录成功但未返回用户 ID");
+      $("f-token").value = env.data.access_token;
+      $("f-uid").value = uid;
+      $("f-pass2").value = "";
+      errEl.classList.remove("hidden");
+      errEl.textContent = "✅ 已登录并获取 Sub2API 令牌与用户 ID，点「保存」完成添加（JWT 过期后需重新获取）";
+    } catch (err) {
+      showErr(err && err.message ? err.message : String(err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "🔑 从登录态自动获取令牌 + 用户 ID";
+    }
+    return;
+  }
 
   const btn = $("btn-auto");
   btn.disabled = true;

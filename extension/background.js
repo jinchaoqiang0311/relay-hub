@@ -41,9 +41,9 @@ async function pushHistory(siteId, info) {
   arr.push({
     t: Date.now(),
     quota: info.quota || 0,
-    aff: info.aff_quota || 0,
-    hist: info.aff_history_quota || 0,
-    count: info.aff_count || 0,
+    aff: info.aff || 0,
+    hist: info.hist || 0,
+    count: info.count || 0,
   });
   while (arr.length > HISTORY_CAP) arr.shift();
   history[siteId] = arr;
@@ -56,13 +56,38 @@ async function markResult(siteId, ok, error) {
   await chrome.storage.local.set({ lastOk });
 }
 
+// fetchCurrent 取站点当前额度。new-api 系走 /api/user/self（Bearer+用户头），
+// Sub2API 走 /api/v1/auth/me（Bearer JWT，余额为美元）。
+async function fetchCurrent(site, perUnit) {
+  if (site.type === "sub2api") {
+    const res = await fetch(site.baseUrl + "/api/v1/auth/me", {
+      headers: { Accept: "application/json", Authorization: "Bearer " + site.token },
+    });
+    const env = await res.json().catch(() => null);
+    if (!env) throw new Error("响应不是 JSON，该站可能不是 Sub2API");
+    if (res.status === 401 || env.code !== 0) {
+      throw new Error(env.message || `HTTP ${res.status}（JWT 可能已过期，请重新自动获取）`);
+    }
+    const balance = Number(env.data && env.data.balance) || 0;
+    return { quota: Math.round(balance * (perUnit || 500000)), aff: 0, hist: 0, count: 0 };
+  }
+  const info = await fetchSelf(site);
+  return {
+    quota: info.quota || 0,
+    aff: info.aff_quota || 0,
+    hist: info.aff_history_quota || 0,
+    count: info.aff_count || 0,
+  };
+}
+
 async function syncAll() {
-  const { sites = [] } = await getStore(["sites"]);
+  const { sites = [], settings = {} } = await getStore(["sites", "settings"]);
+  const perUnit = settings.quotaPerUnit || 500000;
   for (const site of sites) {
     if (site.type === "manual" || site.enabled === false) continue;
     try {
-      const info = await fetchSelf(site);
-      await pushHistory(site.id, info);
+      const cur = await fetchCurrent(site, perUnit);
+      await pushHistory(site.id, cur);
       await markResult(site.id, true);
     } catch (err) {
       await markResult(site.id, false, err && err.message ? err.message : err);
