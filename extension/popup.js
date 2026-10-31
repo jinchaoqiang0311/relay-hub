@@ -88,6 +88,7 @@ function siteHTML(s, arr, ok, per) {
     </div>
     ${ok && !ok.ok && ok.error ? `<div class="err-text">${esc(ok.error)}</div>` : ""}
     ${revealedToks.has(s.id) ? `<div class="tok-plain" title="点「令牌」可隐藏">${esc(s.token)}</div>` : ""}
+    ${s.userId ? `<div class="uid-row"><span class="uid-label">用户 ID</span><span class="uid-val" data-act="copy-uid" title="点击复制">${esc(s.userId)}</span><button class="btn" data-act="copy-uid">复制</button></div>` : ""}
     <div class="site-foot">
       <span class="muted">${last ? relTime(last.t) : "尚无数据"}</span>
       <span>
@@ -130,6 +131,11 @@ $("sites").addEventListener("click", async (e) => {
   }
   if (act === "copy-tok") {
     if (await copyText(site.token)) toast("令牌已复制");
+    else toast("复制失败", true);
+    return;
+  }
+  if (act === "copy-uid") {
+    if (await copyText(String(site.userId))) toast("用户 ID 已复制");
     else toast("复制失败", true);
     return;
   }
