@@ -3,7 +3,7 @@
   "name": "RelayHub Companion",
   "version": "0.1.0",
   "description": "中转站推广收益聚合：多站余额与邀请奖励一站式查看。独立运行，数据仅存本机。",
-  "permissions": ["storage", "alarms"],
+  "permissions": ["storage", "alarms", "activeTab"],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": { "service_worker": "background.js" },
   "action": {

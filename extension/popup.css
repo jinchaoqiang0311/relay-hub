@@ -130,6 +130,8 @@ main { padding: 10px 12px 14px; }
 }
 .field { display: block; margin-bottom: 8px; }
 .field-label { display: block; color: var(--muted); font-size: 11px; margin-bottom: 3px; }
+.url-row { display: flex; gap: 6px; }
+.url-row input { flex: 1; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 input {
   width: 100%;

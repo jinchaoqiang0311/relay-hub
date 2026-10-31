@@ -25,10 +25,13 @@
 
 <!-- 添加表单 -->
 <div id="add-form" class="add-form hidden">
-  <label class="field">
-    <span class="field-label">站点地址</span>
-    <input id="f-url" placeholder="https://api.example.com" spellcheck="false">
-  </label>
+  <div class="field">
+    <span class="field-label">站点地址（打开本插件时所在标签页会自动填入）</span>
+    <div class="url-row">
+      <input id="f-url" placeholder="https://api.example.com" spellcheck="false">
+      <button type="button" class="btn" id="btn-current-tab" title="填入当前标签页的网址">当前页</button>
+    </div>
+  </div>
   <div class="grid2">
     <label class="field">
       <span class="field-label">系统访问令牌</span>

@@ -104,12 +104,35 @@ $("sites").addEventListener("click", async (e) => {
   loadSites();
 });
 
+/* ---------- 当前标签页网址自动填充 ---------- */
+
+// useCurrentTab 取当前活动标签页的网址（origin）填入站点地址。
+// 依赖 activeTab 权限：用户点开插件图标即临时授权，无需常驻「读取浏览记录」权限。
+async function useCurrentTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.url) return false;
+    const u = new URL(tab.url);
+    if (!/^https?:$/.test(u.protocol)) return false;
+    $("f-url").value = u.origin;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+$("btn-current-tab").addEventListener("click", async () => {
+  const ok = await useCurrentTab();
+  toast(ok ? "已填入当前标签页网址" : "当前标签页不是 http/https 网址", !ok);
+});
+
 /* ---------- 添加站点 ---------- */
 
-$("btn-add").addEventListener("click", () => {
+$("btn-add").addEventListener("click", async () => {
   $("add-form").classList.remove("hidden");
   $("add-error").classList.add("hidden");
-  $("f-url").focus();
+  const filled = await useCurrentTab(); // 打开即预填当前站点
+  if (!filled) $("f-url").focus();
 });
 $("btn-cancel").addEventListener("click", () => $("add-form").classList.add("hidden"));
 $("f-manual").addEventListener("change", () => {
