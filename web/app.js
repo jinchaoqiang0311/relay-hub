@@ -74,13 +74,13 @@ function fmtDT(iso) {
 }
 
 let toastTimer = null;
-function toast(msg, isError = false) {
+function toast(msg, isError = false, ms) {
   const el = $("toast");
   el.textContent = msg;
   el.classList.toggle("is-error", isError);
   el.classList.remove("hidden");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add("hidden"), isError ? 4200 : 2400);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), ms || (isError ? 4200 : 2600));
 }
 
 function showErr(id, msg) {
@@ -230,9 +230,11 @@ function cardHTML(s) {
         : '<span class="dot dot-err"></span>异常';
 
   const actions = isManual
-    ? '<button class="btn btn-sm" data-act="edit">更新数值</button>' +
+    ? (s.withdraw_url ? '<button class="btn btn-sm" data-act="apply">申请提现</button>' : "") +
+      '<button class="btn btn-sm" data-act="edit">更新数值</button>' +
       '<button class="btn btn-sm btn-danger" data-act="del">删除</button>'
-    : '<button class="btn btn-sm" data-act="sync">同步</button>' +
+    : (s.withdraw_url ? '<button class="btn btn-sm" data-act="apply">申请提现</button>' : "") +
+      '<button class="btn btn-sm" data-act="sync">同步</button>' +
       (l && l.aff_quota > 0 ? '<button class="btn btn-sm" data-act="aff">转余额</button>' : "") +
       '<button class="btn btn-sm" data-act="edit">编辑</button>' +
       '<button class="btn btn-sm btn-danger" data-act="del">删除</button>';
@@ -340,6 +342,7 @@ $("sites").addEventListener("click", async (e) => {
   }
 
   if (act === "edit") openSiteDialog(site);
+  if (act === "apply") openApply(site);
 
   if (act === "del") {
     if (!confirm(`确认删除站点「${site.name}」？它的历史数据会一并删除。`)) return;
@@ -389,6 +392,11 @@ function openSiteDialog(site) {
   $("f-mquota").value = mu ? mu.quota : "";
   $("f-maff").value = mu ? mu.aff : "";
   $("f-mhist").value = mu ? mu.hist : "";
+  $("f-wurl").value = site && site.withdraw_url_custom ? site.withdraw_url : "";
+  $("f-wapi").value = site ? (site.withdraw_api || "") : "";
+  $("f-wurl").placeholder = site && site.withdraw_url && !site.withdraw_url_custom
+    ? "当前默认：" + site.withdraw_url
+    : "留空用默认 /console/wallet";
   $("f-enabled").checked = site ? site.enabled : true;
   $("probe-result").classList.add("hidden");
   hideErr("site-error");
@@ -485,6 +493,8 @@ $("site-form").addEventListener("submit", async (e) => {
     base_url: $("f-url").value.trim(),
     type,
     enabled: $("f-enabled").checked,
+    withdraw_url: $("f-wurl").value.trim(),
+    withdraw_api: $("f-wapi").value.trim(),
   };
 
   if (type === "manual") {
@@ -617,6 +627,7 @@ $("ledger-table").addEventListener("click", async (e) => {
 
 function openWD(wd) {
   state.editingWD = wd ? wd.id : null;
+  state.wdApplySite = null;
   $("wd-dialog-title").textContent = wd ? "编辑提现记录" : "记一笔提现";
   const sel = $("w-site");
   sel.innerHTML = state.sites.length
@@ -636,7 +647,27 @@ function openWD(wd) {
     $("w-status").value = "pending";
     $("w-note").value = "";
   }
+  $("wd-open-field").classList.add("hidden");
   $("w-status-field").classList.toggle("hidden", !wd);
+  hideErr("wd-error");
+  $("wd-dialog").showModal();
+}
+
+// openApply 一键申请提现：金额预填站点可用余额，保存后登记台账并打开提现页
+function openApply(site) {
+  state.editingWD = null;
+  state.wdApplySite = site;
+  $("wd-dialog-title").textContent = `申请提现 · ${site.name}`;
+  const sel = $("w-site");
+  sel.innerHTML = `<option value="${site.id}">${esc(site.name)}</option>`;
+  sel.disabled = true;
+  const l = site.latest;
+  $("w-amount").value = l ? (l.quota / state.quotaPerUnit).toFixed(2) : "";
+  $("w-channel").value = "支付宝";
+  $("w-note").value = "";
+  $("wd-open-field").classList.remove("hidden");
+  $("w-open").checked = true;
+  $("w-status-field").classList.add("hidden");
   hideErr("wd-error");
   $("wd-dialog").showModal();
 }
@@ -662,12 +693,39 @@ $("wd-form").addEventListener("submit", async (e) => {
     return;
   }
   hideErr("wd-error");
+
+  // 一键申请模式：直接向站方（如已配置接口）提交并登记台账
+  if (state.wdApplySite) {
+    try {
+      const res = await api(`/api/sites/${state.wdApplySite.id}/withdraw`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      if ($("w-open").checked && res.withdraw_url) {
+        window.open(res.withdraw_url, "_blank");
+      }
+      toast(res.auto_submitted
+        ? `站方已受理：${res.station_message || "申请已提交"}（已在台账登记）`
+        : "已登记台账，请在打开的页面完成申请，到账后回来标记", false, 4200);
+      $("wd-dialog").close();
+      await loadSites();
+      if (state.view === "ledger") await loadLedger();
+    } catch (err) {
+      showErr("wd-error", err.message);
+    }
+    return;
+  }
+
   try {
     if (state.editingWD) {
       payload.status = $("w-status").value;
       await api(`/api/withdrawals/${state.editingWD}`, { method: "PUT", body: JSON.stringify(payload) });
     } else {
       await api("/api/withdrawals", { method: "POST", body: JSON.stringify(payload) });
+      if ($("w-open").checked) {
+        const site = state.sites.find((x) => x.id === payload.site_id);
+        if (site && site.withdraw_url) window.open(site.withdraw_url, "_blank");
+      }
     }
     $("wd-dialog").close();
     toast("已保存");

@@ -162,6 +162,18 @@
       <input type="checkbox" id="f-enabled" checked>
       <span>启用自动同步</span>
     </label>
+
+    <div class="grid2">
+      <label class="field">
+        <span class="field-label">提现页 URL（留空用默认 /console/wallet）</span>
+        <input id="f-wurl" placeholder="https://.../withdraw" spellcheck="false">
+      </label>
+      <label class="field">
+        <span class="field-label">提现接口路径（实验性，可留空）</span>
+        <input id="f-wapi" placeholder="如 /api/user/withdraw" spellcheck="false">
+      </label>
+    </div>
+    <p class="hint">配置接口路径后「申请提现」会直接向站方提交申请（POST amount，美元），响应原样展示；未配置时仅登记台账并打开提现页。</p>
     <div id="probe-result" class="probe hidden" role="status"></div>
     <p id="site-error" class="form-error hidden" role="alert"></p>
     <div class="dialog-actions">
@@ -208,6 +220,10 @@
     <label class="field">
       <span class="field-label">备注</span>
       <input id="w-note" placeholder="如：申请时间、工单号">
+    </label>
+    <label class="check field" id="wd-open-field">
+      <input type="checkbox" id="w-open">
+      <span>保存后打开站点提现页</span>
     </label>
     <p id="wd-error" class="form-error hidden" role="alert"></p>
     <div class="dialog-actions">

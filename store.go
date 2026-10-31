@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -50,6 +51,11 @@ type Site struct {
 	ManualAffQuota   int64 `json:"manual_aff_quota,omitempty"`
 	ManualAffHistory int64 `json:"manual_aff_history,omitempty"`
 
+	// 提现入口：WithdrawURL 为「申请提现」时打开的页面（默认 {base}/console/wallet）；
+	// WithdrawAPI 为实验性的站方提现接口路径（个别魔改站才有，配置后一键提交申请）。
+	WithdrawURL string `json:"withdraw_url,omitempty"`
+	WithdrawAPI string `json:"withdraw_api,omitempty"`
+
 	LastSyncAt time.Time `json:"last_sync_at"`
 	LastSyncOK bool      `json:"last_sync_ok"`
 	LastError  string    `json:"last_error,omitempty"`
@@ -86,6 +92,11 @@ type siteView struct {
 	Latest     *Snapshot `json:"latest,omitempty"`
 	Spark      []sparkPoint `json:"spark,omitempty"`
 	ManualUSD  *manualUSD   `json:"manual_usd,omitempty"`
+	// WithdrawURL 返回实际生效的提现页地址（用户配置 > 默认 {base}/console/wallet）。
+	WithdrawURL       string `json:"withdraw_url,omitempty"`
+	WithdrawURLCustom bool   `json:"withdraw_url_custom"`
+	HasWithdrawAPI    bool   `json:"has_withdraw_api"`
+	WithdrawAPI       string `json:"withdraw_api,omitempty"`
 }
 
 type sparkPoint struct {
@@ -400,6 +411,14 @@ func (db *DB) SiteViews() []siteView {
 				Hist:  float64(s.ManualAffHistory) / per,
 			}
 		}
+		if s.WithdrawURL != "" {
+			v.WithdrawURL = s.WithdrawURL
+			v.WithdrawURLCustom = true
+		} else if s.BaseURL != "" {
+			v.WithdrawURL = strings.TrimRight(s.BaseURL, "/") + "/console/wallet"
+		}
+		v.HasWithdrawAPI = s.WithdrawAPI != ""
+		v.WithdrawAPI = s.WithdrawAPI
 		out = append(out, v)
 	}
 	return out

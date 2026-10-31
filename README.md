@@ -44,6 +44,15 @@ relay-hub.exe -addr 0.0.0.0:8077 -data D:/relayhub-data
 - **快照历史**：每站保留最近 500 条（`GET /api/sites/{id}/history`），趋势图基于此重采样
   （`GET /api/trend?days=30`）
 
+## 一键申请提现
+
+站点卡片 →「申请提现」：金额自动预填站点可用余额，提交后自动登记台账（待到账）并打开站点提现页。
+
+- new-api 原版**没有提现功能**（提现均为各站魔改或人工工单），所以默认行为是「登记台账 + 跳转提现页」
+- 站点编辑里可配置「提现页 URL」（默认 `{base}/console/wallet`）适配任意站
+- **实验性**：个别魔改站有自定义提现接口，配置「提现接口路径」后（如 `/api/user/withdraw`），
+  RelayHub 会直接 POST `{amount}`（美元，带鉴权头）向站方提交申请，站方响应原样展示；成功才落台账
+
 ## Telegram 通知
 
 设置 → Telegram 通知：

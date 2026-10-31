@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -58,6 +59,7 @@ func main() {
 	mux.HandleFunc("DELETE /api/sites/{id}", a.requireUnlock(a.handleSiteDelete))
 	mux.HandleFunc("POST /api/sites/{id}/sync", a.requireUnlock(a.handleSiteSync))
 	mux.HandleFunc("POST /api/sites/{id}/aff-transfer", a.requireUnlock(a.handleAffTransfer))
+	mux.HandleFunc("POST /api/sites/{id}/withdraw", a.requireUnlock(a.handleWithdrawApply))
 	mux.HandleFunc("GET /api/sites/{id}/history", a.requireUnlock(a.handleSiteHistory))
 	mux.HandleFunc("POST /api/sync", a.requireUnlock(a.handleSyncAll))
 	mux.HandleFunc("GET /api/settings", a.requireUnlock(a.handleSettingsGet))
@@ -282,6 +284,11 @@ type siteRequest struct {
 	ManualQuotaUSD      float64 `json:"manual_quota_usd"`
 	ManualAffUSD        float64 `json:"manual_aff_usd"`
 	ManualAffHistoryUSD float64 `json:"manual_aff_history_usd"`
+
+	// 提现入口（留空不修改）：
+	// WithdrawURL 为「申请提现」按钮打开的页面；WithdrawAPI 为实验性站方提现接口路径。
+	WithdrawURL string `json:"withdraw_url"`
+	WithdrawAPI string `json:"withdraw_api"`
 }
 
 func usdToQuota(usd, perUnit float64) int64 {
@@ -449,6 +456,12 @@ func (a *app) handleSiteUpdate(w http.ResponseWriter, r *http.Request) {
 				manualUpdated = true
 			}
 		}
+		if u := strings.TrimSpace(req.WithdrawURL); u != "" {
+			st.WithdrawURL = u
+		}
+		if p := strings.TrimSpace(req.WithdrawAPI); p != "" {
+			st.WithdrawAPI = p
+		}
 		return nil
 	})
 	if errors.Is(err, errSiteNotFound) {
@@ -561,6 +574,104 @@ func (a *app) handleAffTransfer(w http.ResponseWriter, r *http.Request) {
 	_ = a.syncer.SyncSite(id) // 刷新余额视图；失败不打断，等下轮同步
 	view, _ := a.db.SiteView(id)
 	writeOK(w, map[string]any{"site": view})
+}
+
+type withdrawApplyRequest struct {
+	AmountUSD float64 `json:"amount_usd"`
+	Channel   string  `json:"channel"`
+	Note      string  `json:"note"`
+}
+
+// handleWithdrawApply 一键申请提现：
+//   - 若站点配置了实验性提现接口（WithdrawAPI），先直接向站方提交申请（成功才继续）；
+//   - 随后登记一笔「待到账」台账，并返回提现页地址由前端打开，用户在站内完成最终确认。
+func (a *app) handleWithdrawApply(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r)
+	if !ok {
+		return
+	}
+	var req withdrawApplyRequest
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.AmountUSD <= 0 {
+		writeErr(w, http.StatusBadRequest, "金额必须大于 0")
+		return
+	}
+	site, err := a.db.GetSite(id)
+	if errors.Is(err, errSiteNotFound) {
+		writeErr(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	stationMsg := ""
+	if site.WithdrawAPI != "" && site.Type == "auto" {
+		v := a.syncer.currentVault()
+		token, err := v.openString(site.TokenEnc)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "读取令牌失败: "+err.Error())
+			return
+		}
+		body, _ := json.Marshal(map[string]any{"amount": req.AmountUSD})
+		hdrs := authHeaders(token, site.UserID)
+		env, status, err := doEnvelope(a.syncer.client.http, http.MethodPost,
+			strings.TrimRight(site.BaseURL, "/")+site.WithdrawAPI, hdrs, string(body))
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, "站方提现接口请求失败: "+err.Error())
+			return
+		}
+		if status != http.StatusOK || !env.Success {
+			msg := strings.TrimSpace(env.Message)
+			if msg == "" {
+				msg = fmt.Sprintf("HTTP %d", status)
+			}
+			writeErr(w, http.StatusBadGateway, "站方拒绝提现申请: "+msg)
+			return
+		}
+		stationMsg = strings.TrimSpace(env.Message)
+	}
+
+	wd := &Withdrawal{
+		SiteID:    site.ID,
+		SiteName:  site.Name,
+		AmountUSD: req.AmountUSD,
+		Channel:   strings.TrimSpace(req.Channel),
+		Note:      strings.TrimSpace(req.Note),
+		Status:    "pending",
+		CreatedAt: time.Now(),
+	}
+	if stationMsg != "" {
+		wd.Note = strings.TrimSpace("自动提交：" + stationMsg + (func() string {
+			if wd.Note != "" {
+				return " ｜ " + wd.Note
+			}
+			return ""
+		})())
+	}
+	if err := a.db.AddWithdrawal(wd); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, map[string]any{
+		"withdrawal":      wd,
+		"withdraw_url":    a.effectiveWithdrawURL(site),
+		"station_message": stationMsg,
+		"auto_submitted":  stationMsg != "",
+	})
+}
+
+func (a *app) effectiveWithdrawURL(site Site) string {
+	if site.WithdrawURL != "" {
+		return site.WithdrawURL
+	}
+	if site.BaseURL != "" {
+		return strings.TrimRight(site.BaseURL, "/") + "/console/wallet"
+	}
+	return ""
 }
 
 func (a *app) handleSiteHistory(w http.ResponseWriter, r *http.Request) {
