@@ -427,6 +427,39 @@ $("sites").addEventListener("click", async (e) => {
   }
 });
 
+async function fetchSiteToken(siteId) {
+  const res = await api(`/api/sites/${siteId}/token`);
+  return res.token;
+}
+
+$("btn-token-reveal").addEventListener("click", async () => {
+  if (state.tokenRevealed) {
+    state.tokenRevealed = false;
+    $("token-plain").textContent = "••••••••••••";
+    $("btn-token-reveal").textContent = "查看";
+    return;
+  }
+  try {
+    const token = await fetchSiteToken(state.editingId);
+    state.tokenRevealed = true;
+    $("token-plain").textContent = token;
+    $("token-plain").title = token;
+    $("btn-token-reveal").textContent = "隐藏";
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
+$("btn-token-copy").addEventListener("click", async () => {
+  try {
+    const token = state.tokenRevealed ? $("token-plain").textContent : await fetchSiteToken(state.editingId);
+    if (await copyText(token)) toast("令牌已复制");
+    else toast("复制失败", true);
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
 /* ---------- 添加 / 编辑弹窗 ---------- */
 
 function applyTypeBlock() {
@@ -466,6 +499,15 @@ function openSiteDialog(site) {
   $("f-wurl").value = site && site.withdraw_url_custom ? site.withdraw_url : "";
   $("f-wapi").value = site ? (site.withdraw_api || "") : "";
   $("f-aff").value = site ? (site.aff_code || "") : "";
+  // 当前令牌揭示行：仅编辑已有令牌的站点时显示
+  state.tokenRevealed = false;
+  if (site && site.has_token) {
+    $("token-view-row").classList.remove("hidden");
+    $("token-plain").textContent = "••••••••••••";
+    $("btn-token-reveal").textContent = "查看";
+  } else {
+    $("token-view-row").classList.add("hidden");
+  }
   $("f-wurl").placeholder = site && site.withdraw_url && !site.withdraw_url_custom
     ? "当前默认：" + site.withdraw_url
     : "留空用默认 /console/wallet";

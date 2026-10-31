@@ -60,6 +60,7 @@ func main() {
 	mux.HandleFunc("POST /api/sites/{id}/sync", a.requireUnlock(a.handleSiteSync))
 	mux.HandleFunc("POST /api/sites/{id}/aff-transfer", a.requireUnlock(a.handleAffTransfer))
 	mux.HandleFunc("POST /api/sites/{id}/withdraw", a.requireUnlock(a.handleWithdrawApply))
+	mux.HandleFunc("GET /api/sites/{id}/token", a.requireUnlock(a.handleSiteToken))
 	mux.HandleFunc("GET /api/sites/{id}/history", a.requireUnlock(a.handleSiteHistory))
 	mux.HandleFunc("POST /api/sync", a.requireUnlock(a.handleSyncAll))
 	mux.HandleFunc("GET /api/settings", a.requireUnlock(a.handleSettingsGet))
@@ -679,6 +680,36 @@ func (a *app) effectiveWithdrawURL(site Site) string {
 		return strings.TrimRight(site.BaseURL, "/") + "/console/wallet"
 	}
 	return ""
+}
+
+// handleSiteToken 返回某站点已存令牌的明文（需解锁）。用于把令牌复用到插件或其他工具。
+// 查看动作写入服务日志留痕；令牌不出现在任何列表接口里，只有显式请求单个站点才返回。
+func (a *app) handleSiteToken(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.pathID(w, r)
+	if !ok {
+		return
+	}
+	site, err := a.db.GetSite(id)
+	if errors.Is(err, errSiteNotFound) {
+		writeErr(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if site.TokenEnc == "" {
+		writeErr(w, http.StatusBadRequest, "该站点没有存储令牌（手动记录站点不使用令牌）")
+		return
+	}
+	v := a.syncer.currentVault()
+	token, err := v.openString(site.TokenEnc)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "解密失败: "+err.Error())
+		return
+	}
+	log.Printf("[audit] 站点 %s(#%d) 的令牌已被查看", site.Name, site.ID)
+	writeOK(w, map[string]any{"token": token})
 }
 
 func (a *app) handleSiteHistory(w http.ResponseWriter, r *http.Request) {
