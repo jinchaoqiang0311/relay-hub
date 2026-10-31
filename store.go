@@ -56,6 +56,9 @@ type Site struct {
 	WithdrawURL string `json:"withdraw_url,omitempty"`
 	WithdrawAPI string `json:"withdraw_api,omitempty"`
 
+	// AffCode 邀请码：自动站随同步更新，手动站可手填；邀请链接 = {base}/register?aff={code}。
+	AffCode string `json:"aff_code,omitempty"`
+
 	LastSyncAt time.Time `json:"last_sync_at"`
 	LastSyncOK bool      `json:"last_sync_ok"`
 	LastError  string    `json:"last_error,omitempty"`
@@ -97,6 +100,7 @@ type siteView struct {
 	WithdrawURLCustom bool   `json:"withdraw_url_custom"`
 	HasWithdrawAPI    bool   `json:"has_withdraw_api"`
 	WithdrawAPI       string `json:"withdraw_api,omitempty"`
+	AffCode           string `json:"aff_code,omitempty"`
 }
 
 type sparkPoint struct {
@@ -419,6 +423,7 @@ func (db *DB) SiteViews() []siteView {
 		}
 		v.HasWithdrawAPI = s.WithdrawAPI != ""
 		v.WithdrawAPI = s.WithdrawAPI
+		v.AffCode = s.AffCode
 		out = append(out, v)
 	}
 	return out

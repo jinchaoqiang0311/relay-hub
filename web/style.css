@@ -150,6 +150,7 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: 0.01em; }
   margin-bottom: 16px;
 }
 .sites-head h2 { font-size: 15px; color: var(--muted); font-weight: 600; }
+.sites-head-actions { display: flex; gap: 8px; }
 
 .sites {
   display: grid;
@@ -422,6 +423,23 @@ input::placeholder { color: var(--faint); }
   width: 100%;
   height: 24px;
   margin: 2px 0 10px;
+}
+
+.invite-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.invite-label { color: var(--faint); font-size: 12px; flex: none; }
+.invite-link {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .badge-manual {

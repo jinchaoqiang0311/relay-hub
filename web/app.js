@@ -259,6 +259,7 @@ function cardHTML(s) {
       <div class="metric"><span class="metric-label">邀请人数</span><span class="metric-val">${l ? l.aff_count : "—"}</span></div>
     </div>
     ${sparkSVG(s.spark)}
+    ${inviteRow(s)}
     ${s.last_error && !isManual ? `<div class="card-err">${s.down_count > 1 ? `已连续失败 ${s.down_count} 次：` : ""}${esc(s.last_error)}</div>` : ""}
     <footer class="card-foot">
       <span class="muted small">${footTime}</span>
@@ -266,6 +267,59 @@ function cardHTML(s) {
     </footer>
   </article>`;
 }
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // 非 HTTPS/非 localhost 等不安全上下文的兜底
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  }
+}
+
+/* ---------- 邀请链接 ---------- */
+
+function inviteLink(s) {
+  if (!s.aff_code) return "";
+  const base = (s.base_url || "").replace(/\/+$/, "");
+  return base ? `${base}/register?aff=${encodeURIComponent(s.aff_code)}` : "";
+}
+
+function inviteRow(s) {
+  const link = inviteLink(s);
+  if (!link) return "";
+  return `<div class="invite-row" title="${esc(link)}">
+    <span class="invite-label">邀请</span>
+    <span class="invite-link">${esc(link)}</span>
+    <button class="btn btn-sm" data-act="copy-invite">复制</button>
+  </div>`;
+}
+
+$("btn-copy-invites").addEventListener("click", async () => {
+  const links = state.sites
+    .map((s) => ({ name: s.name, link: inviteLink(s) }))
+    .filter((x) => x.link);
+  if (!links.length) {
+    toast("还没有可复制的邀请链接（等同步拿到邀请码，或在编辑里手填）", true);
+    return;
+  }
+  const text = links.map((x) => `${x.name} ${x.link}`).join("\n");
+  if (await copyText(text)) {
+    toast(`已复制 ${links.length} 条邀请链接`);
+  } else {
+    toast("复制失败，请手动选择文本", true);
+  }
+});
 
 /* ---------- 趋势图 ---------- */
 
@@ -343,6 +397,10 @@ $("sites").addEventListener("click", async (e) => {
 
   if (act === "edit") openSiteDialog(site);
   if (act === "apply") openApply(site);
+  if (act === "copy-invite") {
+    if (await copyText(inviteLink(site))) toast("邀请链接已复制");
+    else toast("复制失败，请手动选择文本", true);
+  }
 
   if (act === "del") {
     if (!confirm(`确认删除站点「${site.name}」？它的历史数据会一并删除。`)) return;
@@ -394,6 +452,7 @@ function openSiteDialog(site) {
   $("f-mhist").value = mu ? mu.hist : "";
   $("f-wurl").value = site && site.withdraw_url_custom ? site.withdraw_url : "";
   $("f-wapi").value = site ? (site.withdraw_api || "") : "";
+  $("f-aff").value = site ? (site.aff_code || "") : "";
   $("f-wurl").placeholder = site && site.withdraw_url && !site.withdraw_url_custom
     ? "当前默认：" + site.withdraw_url
     : "留空用默认 /console/wallet";
@@ -495,6 +554,7 @@ $("site-form").addEventListener("submit", async (e) => {
     enabled: $("f-enabled").checked,
     withdraw_url: $("f-wurl").value.trim(),
     withdraw_api: $("f-wapi").value.trim(),
+    aff_code: $("f-aff").value.trim(),
   };
 
   if (type === "manual") {

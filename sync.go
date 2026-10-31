@@ -117,6 +117,9 @@ func (s *Syncer) SyncSite(id int64) error {
 		st.LastSyncOK = true
 		st.LastError = ""
 		st.DownCount = 0
+		if info.AffCode != "" {
+			st.AffCode = info.AffCode
+		}
 		return nil
 	}); err != nil {
 		return err

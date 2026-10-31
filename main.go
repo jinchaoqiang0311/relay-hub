@@ -289,6 +289,9 @@ type siteRequest struct {
 	// WithdrawURL 为「申请提现」按钮打开的页面；WithdrawAPI 为实验性站方提现接口路径。
 	WithdrawURL string `json:"withdraw_url"`
 	WithdrawAPI string `json:"withdraw_api"`
+
+	// AffCode 邀请码（手动站手填；自动站随同步自动更新）。
+	AffCode string `json:"aff_code"`
 }
 
 func usdToQuota(usd, perUnit float64) int64 {
@@ -332,6 +335,7 @@ func (a *app) handleSiteAdd(w http.ResponseWriter, r *http.Request) {
 			BaseURL:          base,
 			Type:             "manual",
 			Enabled:          enabled,
+			AffCode:          strings.TrimSpace(req.AffCode),
 			ManualQuota:      usdToQuota(req.ManualQuotaUSD, per),
 			ManualAffQuota:   usdToQuota(req.ManualAffUSD, per),
 			ManualAffHistory: usdToQuota(req.ManualAffHistoryUSD, per),
@@ -461,6 +465,9 @@ func (a *app) handleSiteUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		if p := strings.TrimSpace(req.WithdrawAPI); p != "" {
 			st.WithdrawAPI = p
+		}
+		if c := strings.TrimSpace(req.AffCode); c != "" {
+			st.AffCode = c
 		}
 		return nil
 	})

@@ -26,6 +26,7 @@ type SelfInfo struct {
 	AffQuota     int64  `json:"aff_quota"`
 	AffHistory   int64  `json:"aff_history_quota"`
 	AffCount     int64  `json:"aff_count"`
+	AffCode      string `json:"aff_code"`
 }
 
 type apiEnvelope struct {

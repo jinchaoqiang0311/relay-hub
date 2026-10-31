@@ -57,7 +57,10 @@
 
       <section class="sites-head">
         <h2>站点</h2>
-        <button id="btn-add" class="btn btn-primary">＋ 添加站点</button>
+        <div class="sites-head-actions">
+          <button id="btn-copy-invites" class="btn">复制全部邀请链接</button>
+          <button id="btn-add" class="btn btn-primary">＋ 添加站点</button>
+        </div>
       </section>
 
       <section id="sites" class="sites" aria-label="站点列表"></section>
@@ -173,6 +176,10 @@
         <input id="f-wapi" placeholder="如 /api/user/withdraw" spellcheck="false">
       </label>
     </div>
+    <label class="field">
+      <span class="field-label">邀请码 AFF Code（自动站随同步获取；手动站可手填）</span>
+      <input id="f-aff" placeholder="如 eAb3x9K2" spellcheck="false">
+    </label>
     <p class="hint">配置接口路径后「申请提现」会直接向站方提交申请（POST amount，美元），响应原样展示；未配置时仅登记台账并打开提现页。</p>
     <div id="probe-result" class="probe hidden" role="status"></div>
     <p id="site-error" class="form-error hidden" role="alert"></p>
