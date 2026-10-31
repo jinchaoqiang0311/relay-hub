@@ -145,6 +145,8 @@ input {
 input:focus-visible { outline: none; border-color: var(--accent); }
 .check { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
 .check input { width: auto; }
+.btn-block { width: 100%; }
+.hint-sm { color: var(--faint); font-size: 11px; margin: 6px 0 8px; line-height: 1.5; }
 .row { display: flex; gap: 6px; }
 .spacer { flex: 1; }
 .err {

@@ -175,6 +175,90 @@ $("btn-save").addEventListener("click", async () => {
   }
 });
 
+/* ---------- 从登录态自动获取令牌 + 用户 ID ---------- */
+
+// getJSON 调站点接口并解析统一信封；credentials 带上浏览器 Cookie（需已授权该站点）。
+async function getJSON(url, opts = {}) {
+  let res;
+  try {
+    res = await fetch(url, { credentials: "include", headers: { Accept: "application/json", ...opts.headers } });
+  } catch {
+    throw new Error("无法连接站点");
+  }
+  const env = await res.json().catch(() => null);
+  if (!env) throw new Error(`响应不是 JSON（HTTP ${res.status}），该站可能不是 new-api/one-api 系`);
+  return env;
+}
+
+function popupErr(msg) {
+  const el = $("add-error");
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+
+$("btn-auto").addEventListener("click", async () => {
+  const errEl = $("add-error");
+  errEl.classList.add("hidden");
+  const showErr = (m) => { errEl.textContent = m; errEl.classList.remove("hidden"); };
+
+  let raw = $("f-url").value.trim();
+  if (!raw) return showErr("请先填站点地址");
+  if (!raw.includes("://")) raw = "https://" + raw;
+  let u;
+  try { u = new URL(raw); } catch { return showErr("站点地址无效"); }
+  if (!/^https?:$/.test(u.protocol)) return showErr("仅支持 http/https");
+  const base = u.origin;
+
+  if ($("f-manual").checked) return showErr("手动记录模式不接 API，无需获取令牌");
+
+  const btn = $("btn-auto");
+  btn.disabled = true;
+  btn.textContent = "获取中…";
+  try {
+    // 按站点申请 Cookie 访问权限（用户手势内调用）
+    const granted = await chrome.permissions.request({ origins: [u.origin + "/*"] });
+    if (!granted) throw new Error("未授权访问该站点，无法读取登录态");
+
+    // 1) 用登录态调 /api/user/self：拿数字 ID 与已生成的令牌
+    const selfEnv = await getJSON(base + "/api/user/self");
+    if (!selfEnv.success || !selfEnv.data || !selfEnv.data.id) {
+      const msg = selfEnv.message || "";
+      throw new Error(
+        /无权|未登录|token/i.test(msg) || !selfEnv.success
+          ? "未读取到登录态：请先在浏览器的标签页里登录该站（若刚登录，刷新一下站点页面），再点本按钮"
+          : msg || "站点返回异常"
+      );
+    }
+    const uid = selfEnv.data.id;
+    let token = selfEnv.data.access_token || "";
+    let regenerated = false;
+
+    // 2) 从未生成过令牌才生成（复用现有令牌不会影响别处的使用）
+    if (!token) {
+      const tEnv = await getJSON(base + "/api/user/token", {
+        headers: { "New-Api-User": String(uid), "Veloera-User": String(uid) },
+      });
+      if (!tEnv.success || !tEnv.data || typeof tEnv.data !== "string") {
+        throw new Error("生成令牌失败：" + (tEnv.message || "站点未返回令牌"));
+      }
+      token = tEnv.data;
+      regenerated = true;
+    }
+
+    $("f-token").value = token;
+    $("f-uid").value = uid;
+    errEl.classList.remove("hidden");
+    errEl.textContent = regenerated
+      ? "✅ 已自动生成令牌并获取用户 ID，点「保存」完成添加（该站旧令牌已失效）"
+      : "✅ 已从登录态读取现有令牌与用户 ID，点「保存」完成添加";
+  } catch (err) {
+    showErr(err && err.message ? err.message : String(err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔑 从登录态自动获取令牌 + 用户 ID";
+  }
+});
+
 /* ---------- 同步按钮 ---------- */
 
 $("btn-sync").addEventListener("click", () => {
